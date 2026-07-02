@@ -3,183 +3,540 @@ import math
 
 pygame.init()
 
-# Setup Pygame window
-WIDTH, HEIGHT = 600, 600
+WIDTH, HEIGHT = 1100, 680
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Vehicles")
+pygame.display.set_caption("Braitenberg Vehicle 5 — Logic")
 
-# Setup clock for controlling frame rate
 clock = pygame.time.Clock()
-fps = 60
+fps   = 60
 
-# Setup font for debug info
-font = pygame.font.SysFont("consolas", 16)
+font_title = pygame.font.SysFont("consolas", 24, bold=True)
+font_head  = pygame.font.SysFont("consolas", 14, bold=True)
+font_body  = pygame.font.SysFont("consolas", 13)
 
-
-# Vehicle Two
-class VehicleTwo:
-    def __init__(self, x, y, radius=20, heading=0):
-        # Vehicle state
-        self.x = x
-        self.y = y
-        self.radius = radius
-        self.heading = heading
-
-        # Sensor configuration
-        self.sensor_offset_angle = math.radians(30)
-        self.sensor_dist = self.radius
-
-    # Calculate sensor positions based on vehicle position and heading
-    def _sensor_positions(self):
-        angle = self.sensor_offset_angle
-        distance = self.sensor_dist
-
-        # Calculate x and y relative to vehicle center
-        left_local_x = math.cos(+angle) * distance
-        left_local_y = math.sin(+angle) * distance
-        right_local_x = math.cos(-angle) * distance
-        right_local_y = math.sin(-angle) * distance
-
-        # Calculate x and y relative to world coordinates (of vehicle)
-        cos_heading = math.cos(self.heading)
-        sin_heading = math.sin(self.heading)
-
-        left_world_x = self.x + cos_heading * left_local_x - sin_heading * left_local_y
-        left_world_y = self.y + sin_heading * left_local_x + cos_heading * left_local_y
-        right_world_x = (
-            self.x + cos_heading * right_local_x - sin_heading * right_local_y
-        )
-        right_world_y = (
-            self.y + sin_heading * right_local_x + cos_heading * right_local_y
-        )
-
-        # Return sensor positions
-        left_sensor_position = (left_world_x, left_world_y)
-        right_sensor_position = (right_world_x, right_world_y)
-        return left_sensor_position, right_sensor_position
-
-    # Calculate intensity value of a particular source at a given point
-    def _intensity_at(self, point_x, point_y, light_x, light_y):
-        # EDIT this to change how intensity is calculated such as using inverse-square law
-        # When using multiple sources, consider adding a new function to
-        # aggregate intensities and if needed normalize them
-        return 1.0
-
-    # Update sensor intensities based on light position(s)
-    def update(self, light_pos):
-        # Get sensor positions
-        left_sensor, right_sensor = self._sensor_positions()
-
-        # Calculate intensities at each sensor
-        # Update this section to handle multiple light sources if needed
-        self.intensity_left = self._intensity_at(
-            left_sensor[0], left_sensor[1], light_pos[0], light_pos[1]
-        )
-        self.intensity_right = self._intensity_at(
-            right_sensor[0], right_sensor[1], light_pos[0], light_pos[1]
-        )
-        left_motor_speed = (
-            1  # EDIT this value to set left motor speed based on intensity
-        )
-        right_motor_speed = (
-            1  # EDIT this value to set right motor speed based on intensity
-        )
-
-        forward_speed = (
-            left_motor_speed * right_motor_speed
-        )  # EDIT this value to set forward speed based on motor speeds
-        turning_rate = 0  # EDIT this value to set turning rate based on motor speeds
-
-        # Update vehicle position and heading based on calculated speed and turning rate
-        self.heading += turning_rate
-        self.x += forward_speed * math.cos(self.heading)
-        self.y += forward_speed * math.sin(self.heading)
-
-        self.x %= WIDTH
-        self.y %= HEIGHT
-
-    def draw(self, surface):
-        pygame.draw.circle(
-            surface, (0, 0, 255), (int(self.x), int(self.y)), self.radius
-        )
-        pygame.draw.circle(
-            surface, (0, 0, 0), (int(self.x), int(self.y)), self.radius, 2
-        )
-
-        left_sensor, right_sensor = self._sensor_positions()
-        pygame.draw.circle(
-            surface, (255, 0, 0), (int(left_sensor[0]), int(left_sensor[1])), 5
-        )
-        pygame.draw.circle(
-            surface, (255, 0, 0), (int(right_sensor[0]), int(right_sensor[1])), 5
-        )
-
-        # Optionally draw debug info
-        if font:
-            surface.blit(
-                font.render(
-                    "Speed=xxx Turning=xxx",
-                    True,
-                    (0, 0, 0),
-                ),
-                (10, 10),
-            )
-            surface.blit(
-                font.render(
-                    "Left=xxx Right=xxx",
-                    True,
-                    (0, 0, 0),
-                ),
-                (10, 30),
-            )
+BG       = (15,  20,  35)
+PANEL_BG = (25,  32,  52)
+BORDER   = (50,  70, 110)
+WHITE    = (230, 235, 245)
+GREY     = (120, 130, 150)
+GREEN    = ( 60, 210, 100)
+RED      = (220,  60,  60)
+BLUE     = ( 60, 130, 220)
+YELLOW   = (255, 210,  50)
+PURPLE   = (180,  80, 220)
+ORANGE   = (255, 150,  40)
+DGREEN   = ( 20,  60,  30)
+DRED     = ( 70,  20,  20)
 
 
-# Light source
-# COPY OR EXTEND this to support multiple source types if needed
-class Light:
-    def __init__(self, x, y, radius=10):
+# ════════════════════════════════════════════════════════════
+# THRESHOLD DEVICE
+#
+# Basic electrical element:
+#   - Has output  if  input  >= threshold   (fires)
+#   - No output   if  input  <  threshold   (silent)
+#   - Inhibition subtracts from input before comparison
+# ════════════════════════════════════════════════════════════
+class ThresholdDevice:
+    def __init__(self, threshold):
+        self.threshold = threshold
+        self.output    = 0    # 0 = no signal,  1 = signal
+
+    def update(self, input_signal, inhibition=0):
+        net = input_signal - inhibition
+        self.output = 1 if net >= self.threshold else 0
+        return self.output
+
+
+# ════════════════════════════════════════════════════════════
+# COUNTER  (built from threshold devices)
+#
+# Uses previous-state / next-state logic:
+#
+#   pulse_input  +  previous_state  →  next_state
+#
+# Each ThresholdDevice holds one count state (threshold = 2
+# means it needs BOTH the pulse AND the carry from the
+# previous state to advance).
+#
+# Counts:  0 → 1 → 2 → 3  then STOPS and fires "done".
+# ════════════════════════════════════════════════════════════
+class Counter:
+    MAX = 3   # counts up to this number then stops
+
+    def __init__(self):
+        self.steps  = [ThresholdDevice(1),   # step 1
+                       ThresholdDevice(2),   # step 2
+                       ThresholdDevice(2)]   # step 3
+        self.count  = 0
+        self.done   = False
+        self._prev_pulse = 0
+
+    def update(self, pulse):
+        rising = (pulse == 1) and (self._prev_pulse == 0)
+        self._prev_pulse = pulse
+
+        if self.done:
+            return
+
+        if rising:
+            carry = 1
+            for i, device in enumerate(self.steps):
+                carry = device.update(carry + (1 if self.count > i else 0))
+
+            self.count += 1
+            if self.count >= self.MAX:
+                self.done = True
+
+    def reset(self):
+        self.count = 0
+        self.done  = False
+        self._prev_pulse = 0
+        for d in self.steps:
+            d.output = 0
+
+
+# ════════════════════════════════════════════════════════════
+# MEMORY  (reciprocal threshold devices — Chapter 5)
+#
+# Two threshold devices activate each other once a target is
+# stored. They keep each other active (latched) until the
+# strength decays to zero and the latch opens.
+# ════════════════════════════════════════════════════════════
+class Memory:
+    def __init__(self, decay=0.15, capacity=100):
+        self.active   = False
+        self.strength = 0.0
+        self.capacity = capacity
+        self.decay    = decay
+        self.pos      = None   # last known position of target
+        self.name     = None   # name of remembered target
+
+    def store(self, name, pos):
+        self.active   = True
+        self.strength = self.capacity
+        self.name     = name
+        self.pos      = pos
+
+    def update(self):
+        if self.strength > 0:
+            self.strength -= self.decay
+        if self.strength <= 0:
+            self.strength = 0.0
+            self.active   = False
+            self.name     = None
+            self.pos      = None
+
+    def reset(self):
+        self.active   = False
+        self.strength = 0.0
+        self.name     = None
+        self.pos      = None
+
+
+# ════════════════════════════════════════════════════════════
+# SENSOR
+# ════════════════════════════════════════════════════════════
+class Sensor:
+    def __init__(self, detect_threshold=0.5):
+        self.threshold = detect_threshold
+        self.intensity = 0.0
+        self.signal    = 0
+
+    def update(self, px, py, source_x, source_y):
+        dx = source_x - px
+        dy = source_y - py
+        d2 = max(dx*dx + dy*dy, 100)
+        self.intensity = min(15000 / d2, 5.0)
+        self.signal    = 1 if self.intensity >= self.threshold else 0
+        return self.signal
+
+
+# ════════════════════════════════════════════════════════════
+# STIMULUS  (named light source)
+# ════════════════════════════════════════════════════════════
+class Stimulus:
+    def __init__(self, x, y, color, name, radius=22):
         self.x, self.y = x, y
+        self.color  = color
+        self.name   = name
         self.radius = radius
-
-    def move_light(self, new_position):
-        self.x, self.y = new_position
 
     def pos(self):
         return (self.x, self.y)
 
+    def move_to(self, p):
+        self.x, self.y = p
+
     def draw(self, surface):
-        pygame.draw.circle(
-            surface, (255, 255, 0), (int(self.x), int(self.y)), self.radius
-        )
-        pygame.draw.circle(
-            surface, (0, 0, 0), (int(self.x), int(self.y)), self.radius, 2
-        )
+        glow = tuple(min(255, c + 50) for c in self.color)
+        pygame.draw.circle(surface, glow,  (int(self.x), int(self.y)), self.radius + 7, 3)
+        pygame.draw.circle(surface, self.color, (int(self.x), int(self.y)), self.radius)
+        pygame.draw.circle(surface, WHITE, (int(self.x), int(self.y)), self.radius, 2)
+        lbl = font_head.render(self.name, True, BG)
+        surface.blit(lbl, (int(self.x) - lbl.get_width()//2,
+                           int(self.y) - lbl.get_height()//2))
+        tag = font_body.render("(drag)", True, GREY)
+        surface.blit(tag, (int(self.x) - tag.get_width()//2,
+                           int(self.y) + self.radius + 5))
 
 
-# CREATE instances of vehicles and light sources
-# ADJUST as needed to create multiple vehicles or lights
-light = Light(WIDTH // 2, HEIGHT // 2, radius=20)
-vehicle = VehicleTwo(WIDTH // 2 - 100, HEIGHT // 2, radius=20)
+# ════════════════════════════════════════════════════════════
+# VEHICLE FIVE
+# ════════════════════════════════════════════════════════════
+class VehicleFive:
+    def __init__(self, x, y, radius=20, heading=0):
+        self.x       = x
+        self.y       = y
+        self.radius  = radius
+        self.heading = heading
 
-running = True
+        sensor_angle = math.radians(30)
+        sensor_dist  = self.radius
+
+        self._loff = (math.cos(+sensor_angle) * sensor_dist,
+                      math.sin(+sensor_angle) * sensor_dist)
+        self._roff = (math.cos(-sensor_angle) * sensor_dist,
+                      math.sin(-sensor_angle) * sensor_dist)
+
+        # One pair of sensors per good source + one pair for danger
+        self.sensors_good   = [Sensor(), Sensor(), Sensor(), Sensor()]  # L per Y1..Y4
+        self.sensors_good_r = [Sensor(), Sensor(), Sensor(), Sensor()]  # R per Y1..Y4
+        self.sensor_L_danger = Sensor()
+        self.sensor_R_danger = Sensor()
+
+        self.td_see_good   = ThresholdDevice(1)
+        self.td_see_danger = ThresholdDevice(1)
+        self.td_both       = ThresholdDevice(2)
+        self.td_inhibit    = ThresholdDevice(1)  # inhibited by danger → ngadalëson approach
+
+        self.counter = Counter()
+        self.memory  = Memory()
+
+        self.left_motor  = 0.0
+        self.right_motor = 0.0
+
+        self.mode  = "SEARCH"
+        self.trail = []
+        self.frozen = False
+
+        self.out_good    = 0
+        self.out_danger  = 0
+        self.out_both    = 0
+        self.out_inhibit = 0
+        self.best_good_li = 0.0
+        self.best_good_ri = 0.0
+        self.best_src_name = None
+        self.best_src_pos  = None
+
+    def _sensor_world_pos(self):
+        ch = math.cos(self.heading)
+        sh = math.sin(self.heading)
+        lox, loy = self._loff
+        rox, roy = self._roff
+        lx = self.x + ch*lox - sh*loy
+        ly = self.y + sh*lox + ch*loy
+        rx = self.x + ch*rox - sh*roy
+        ry = self.y + sh*rox + ch*roy
+        return (lx, ly), (rx, ry)
+
+    def update(self, good_srcs, danger_src, sim_w):
+        lp, rp = self._sensor_world_pos()
+
+        # Read sensors for each good source, keep best (strongest)
+        best_li, best_ri, any_good_sig, sum_good_sig = 0.0, 0.0, 0, 0
+        best_src_name, best_src_pos = None, None
+        for i, src in enumerate(good_srcs):
+            li = self.sensors_good[i].update(  lp[0], lp[1], src.x, src.y)
+            ri = self.sensors_good_r[i].update(rp[0], rp[1], src.x, src.y)
+            combined = self.sensors_good[i].intensity + self.sensors_good_r[i].intensity
+            if combined > best_li + best_ri:
+                best_li = self.sensors_good[i].intensity
+                best_ri = self.sensors_good_r[i].intensity
+                best_src_name = src.name
+                best_src_pos  = src.pos()
+            if li or ri:
+                any_good_sig  = 1
+                sum_good_sig += 1
+        self.best_good_li  = best_li
+        self.best_good_ri  = best_ri
+        self.best_src_name = best_src_name
+        self.best_src_pos  = best_src_pos
+
+        sig_L_danger = self.sensor_L_danger.update(lp[0], lp[1], danger_src.x, danger_src.y)
+        sig_R_danger = self.sensor_R_danger.update(rp[0], rp[1], danger_src.x, danger_src.y)
+
+        out_good    = self.td_see_good.update(any_good_sig)
+        out_danger  = self.td_see_danger.update(max(sig_L_danger, sig_R_danger))
+        out_both    = self.td_both.update(out_good + out_danger)
+        # inhibitor sipas librit: input=out_good, inhibition=out_danger
+        # net = out_good - out_danger → nëse rreziku present: net=0 < thresh=1 → nuk fires → SLOW
+        out_inhibit = self.td_inhibit.update(out_good, inhibition=out_danger)
+
+        self.out_good    = out_good
+        self.out_danger  = out_danger
+        self.out_both    = out_both
+        self.out_inhibit = out_inhibit
+
+        # Pa freeze — inhibitori trajton të kuqen
+        self.frozen = False
+
+        self.counter.update(out_good)
+
+        if self.counter.done:
+            # Counted all yellow lights → stop completely
+            self.mode = "COUNTER DONE — stopped"
+            self.left_motor  = 0.0
+            self.right_motor = 0.0
+
+        elif out_good:
+            # out_inhibit=0 → rreziku e inhiboi → ngadalëso
+            # out_inhibit=1 → pa rrezik → shpejtësi normale
+            speed = 0.35 if not out_inhibit else 1.0
+            if not out_inhibit:
+                self.mode = f"INHIBITED [{self.counter.count}/{Counter.MAX}]"
+            else:
+                self.mode = f"APPROACH  [{self.counter.count}/{Counter.MAX}]"
+            # Crossed wiring: right sensor → left motor = attraction
+            self.left_motor  = speed * (1.0 + best_ri * 1.8)
+            self.right_motor = speed * (1.0 + best_li * 1.8)
+            # Store this target in memory
+            if best_src_name:
+                self.memory.store(best_src_name, best_src_pos)
+
+        elif self.memory.active:
+            # Yellow lost from sight — navigate toward remembered position
+            mx, my = self.memory.pos
+            dx, dy = mx - self.x, my - self.y
+            target_angle = math.atan2(dy, dx)
+            angle_diff   = (target_angle - self.heading + math.pi) % (2*math.pi) - math.pi
+            if angle_diff > 0:
+                self.left_motor  = 1.0
+                self.right_motor = 1.4
+            else:
+                self.left_motor  = 1.4
+                self.right_motor = 1.0
+            self.mode = f"MEMORY → {self.memory.name}  ({int(self.memory.strength)}%)"
+
+        else:
+            self.mode = "SEARCH"
+            self.left_motor  = 1.0
+            self.right_motor = 1.35
+
+        self.memory.update()
+
+        fwd  = (self.left_motor + self.right_motor) / 2
+        turn = (self.right_motor - self.left_motor) * 0.03
+        self.heading += turn
+        self.x = (self.x + fwd * math.cos(self.heading)) % sim_w
+        self.y = (self.y + fwd * math.sin(self.heading)) % HEIGHT
+
+        self.trail.append((int(self.x), int(self.y)))
+        if len(self.trail) > 350:
+            self.trail.pop(0)
+
+    def draw(self, surface):
+        if len(self.trail) > 2:
+            for i in range(1, len(self.trail)):
+                a   = int(160 * i / len(self.trail))
+                col = (a//4, a//3, a)
+                pygame.draw.line(surface, col, self.trail[i-1], self.trail[i], 1)
+
+        if self.counter.done:
+            body_col = PURPLE
+        elif self.memory.active:
+            body_col = ORANGE
+        elif "INHIBITED" in self.mode:
+            body_col = YELLOW
+        else:
+            body_col = BLUE
+        pygame.draw.circle(surface, body_col, (int(self.x), int(self.y)), self.radius)
+        pygame.draw.circle(surface, WHITE,    (int(self.x), int(self.y)), self.radius, 2)
+
+        lp, rp = self._sensor_world_pos()
+        pygame.draw.circle(surface, (255,80,80), (int(lp[0]), int(lp[1])), 5)
+        pygame.draw.circle(surface, (255,80,80), (int(rp[0]), int(rp[1])), 5)
+
+        nx = self.x + math.cos(self.heading) * self.radius
+        ny = self.y + math.sin(self.heading) * self.radius
+        pygame.draw.line(surface, WHITE,
+                         (int(self.x), int(self.y)), (int(nx), int(ny)), 2)
+
+
+# ════════════════════════════════════════════════════════════
+# UI HELPERS
+# ════════════════════════════════════════════════════════════
+def panel(surface, x, y, w, h, title=None):
+    pygame.draw.rect(surface, PANEL_BG, (x, y, w, h), border_radius=8)
+    pygame.draw.rect(surface, BORDER,   (x, y, w, h), 2, border_radius=8)
+    iy = y + 10
+    if title:
+        surface.blit(font_head.render(title, True, GREY), (x+12, iy))
+        iy += 22
+    return iy
+
+def signal_dot(surface, x, y, on):
+    col = GREEN if on else (50, 55, 75)
+    pygame.draw.circle(surface, col,   (x, y), 8)
+    pygame.draw.circle(surface, WHITE, (x, y), 8, 1)
+
+def bar(surface, x, y, w, h, val, maxv, col):
+    pygame.draw.rect(surface, (35, 40, 60), (x, y, w, h), border_radius=4)
+    if maxv:
+        pygame.draw.rect(surface, col, (x, y, int(w * val / maxv), h), border_radius=4)
+    pygame.draw.rect(surface, BORDER, (x, y, w, h), 1, border_radius=4)
+
+
+# ════════════════════════════════════════════════════════════
+# MAIN
+# ════════════════════════════════════════════════════════════
+SIM_W   = 700
+PANEL_X = SIM_W + 16
+PANEL_W = WIDTH - PANEL_X - 16
+
+good_srcs  = [
+    Stimulus(200, 180, (255, 215,  0),  "Y1"),
+    Stimulus(500, 150, (255, 200, 50),  "Y2"),
+    Stimulus(350, 460, (255, 180,  0),  "Y3"),
+    Stimulus(130, 430, (255, 230, 80),  "Y4"),
+]
+danger_src = Stimulus(560, 370, (210, 40, 40), "RED")
+
+Counter.MAX = len(good_srcs)   # count all yellow lights then stop
+
+vehicle  = VehicleFive(100, 300)
+running  = True
+dragging = None
+
 while running:
-    screen.fill((255, 255, 255))
+    screen.fill(BG)
+    pygame.draw.rect(screen, (20, 26, 42), (0, 0, SIM_W, HEIGHT))
+    pygame.draw.rect(screen, BORDER, (0, 0, SIM_W, HEIGHT), 1)
+
+    screen.blit(font_title.render("Braitenberg  Vehicle 5 — Logic", True, WHITE), (12, 10))
+    screen.blit(font_body.render(
+        "Threshold devices · Counter (prev/next state) · Fear · Detection",
+        True, GREY), (12, 42))
+    pygame.draw.line(screen, BORDER, (12, 62), (SIM_W-12, 62), 1)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        # OPTIONAL functionality to move light with mouse
-        # If needed, extend this to handle multiple lights
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+            vehicle.counter.reset()
+            vehicle.memory.reset()
         if event.type == pygame.MOUSEBUTTONDOWN:
-            light.move_light(event.pos)
+            dragging = None
+            for s in good_srcs + [danger_src]:
+                if math.hypot(event.pos[0]-s.x, event.pos[1]-s.y) < s.radius+10:
+                    dragging = s
+        if event.type == pygame.MOUSEMOTION and dragging:
+            dragging.move_to(event.pos)
+        if event.type == pygame.MOUSEBUTTONUP:
+            dragging = None
 
-    # Draw light source(s)
-    light.draw(screen)
-
-    # Update and draw vehicle(s)
-    # EDIT the update method to pass multiple light positions if needed
-    vehicle.update(light.pos())
+    for s in good_srcs:
+        s.draw(screen)
+    danger_src.draw(screen)
+    vehicle.update(good_srcs, danger_src, SIM_W)
     vehicle.draw(screen)
+    screen.blit(font_body.render("Press R to reset", True, GREY), (12, HEIGHT-24))
+
+    # ── RIGHT PANEL ───────────────────────────────────────
+    # Mode       y=4   h=40  → ends  44
+    # Threshold  y=47  h=160 → ends 207
+    # Counter    y=210 h=100 → ends 310
+    # Sensors    y=313 h=106 → ends 419
+    # Motors     y=422 h=74  → ends 496
+    # Memory     y=499 h=72  → ends 571
+    # Legend     y=574 h=72  → ends 646
+
+    # Mode
+    iy = panel(screen, PANEL_X, 4, PANEL_W, 40)
+    mc = PURPLE if "DONE"      in vehicle.mode else \
+         GREEN  if "APPROACH"  in vehicle.mode else \
+         ORANGE if "MEMORY"    in vehicle.mode else \
+         YELLOW if "INHIBITED" in vehicle.mode else GREY
+    screen.blit(font_body.render("MODE:", True, GREY),    (PANEL_X+12, iy))
+    screen.blit(font_head.render(vehicle.mode, True, mc), (PANEL_X+12, iy+15))
+
+    # Threshold Devices  (header=32, 4×30=120, pad=8 → h=160)
+    iy = panel(screen, PANEL_X, 47, PANEL_W, 160, "Threshold Devices")
+    for sig, name, desc in [
+        (vehicle.out_good,    "td_see_good   (thresh=1)", "→ sees any yellow?"),
+        (vehicle.out_danger,  "td_see_danger (thresh=1)", "→ sees RED light?"),
+        (vehicle.out_both,    "td_both       (thresh=2)", "→ sees both?"),
+        (vehicle.out_inhibit, "td_inhibit    (thresh=1)",     "→ 0=SLOW (inhibited by RED)"),
+    ]:
+        signal_dot(screen, PANEL_X+14, iy+9, sig)
+        screen.blit(font_body.render(name, True, GREEN if sig else WHITE), (PANEL_X+30, iy))
+        screen.blit(font_body.render(desc, True, GREY),                    (PANEL_X+30, iy+15))
+        iy += 30
+
+    # Counter  (header=32, txt=18, circles=32, status=14, pad=4 → h=100)
+    iy = panel(screen, PANEL_X, 210, PANEL_W, 100, f"Counter  MAX={Counter.MAX}")
+    screen.blit(font_body.render("pulse + prev → next state", True, GREY),
+                (PANEL_X+12, iy)); iy += 18
+    spacing = min(54, (PANEL_W - 24) // Counter.MAX)
+    for i in range(Counter.MAX):
+        filled = i < vehicle.counter.count
+        col    = YELLOW if filled else (45, 50, 72)
+        cx     = PANEL_X + 16 + i * spacing + spacing // 2
+        pygame.draw.circle(screen, col,   (cx, iy+12), 11)
+        pygame.draw.circle(screen, WHITE, (cx, iy+12), 11, 2)
+        t = font_body.render(str(i+1), True, BG if filled else GREY)
+        screen.blit(t, (cx - t.get_width()//2, iy+5))
+    iy += 32
+    count_col = PURPLE if vehicle.counter.done else WHITE
+    status    = "DONE — stopped!" if vehicle.counter.done else \
+                f"count: {vehicle.counter.count} / {Counter.MAX}   (R=reset)"
+    screen.blit(font_body.render(status, True, count_col), (PANEL_X+12, iy))
+
+    # Sensors  (header=32, 4×18=72, pad=2 → h=106)
+    iy = panel(screen, PANEL_X, 313, PANEL_W, 106, "Sensor Signals")
+    best_li = max(s.intensity for s in vehicle.sensors_good)
+    best_ri = max(s.intensity for s in vehicle.sensors_good_r)
+    for name, intens, sig, bcol in [
+        ("L-yellow", best_li,                            1 if best_li >= 0.5 else 0, YELLOW),
+        ("R-yellow", best_ri,                            1 if best_ri >= 0.5 else 0, YELLOW),
+        ("L-danger", vehicle.sensor_L_danger.intensity, vehicle.sensor_L_danger.signal, RED),
+        ("R-danger", vehicle.sensor_R_danger.intensity, vehicle.sensor_R_danger.signal, RED),
+    ]:
+        signal_dot(screen, PANEL_X+14, iy+7, sig)
+        screen.blit(font_body.render(name, True, WHITE), (PANEL_X+30, iy))
+        bar(screen, PANEL_X+112, iy+1, PANEL_W-124, 11, intens, 5, bcol)
+        iy += 18
+
+    # Motors  (header=32, 2×20=40, pad=2 → h=74)
+    iy = panel(screen, PANEL_X, 422, PANEL_W, 74, "Motors")
+    screen.blit(font_body.render("Left :", True, GREY), (PANEL_X+12, iy+3))
+    bar(screen, PANEL_X+68, iy+3, PANEL_W-84, 13, min(max(vehicle.left_motor,  0), 12), 12, BLUE)
+    iy += 22
+    screen.blit(font_body.render("Right:", True, GREY), (PANEL_X+12, iy+3))
+    bar(screen, PANEL_X+68, iy+3, PANEL_W-84, 13, min(max(vehicle.right_motor, 0), 12), 12, BLUE)
+
+    # Memory  (header=32, name=18, bar-row=18, pad=4 → h=72)
+    iy = panel(screen, PANEL_X, 499, PANEL_W, 72, "Memory  (reciprocal devices)")
+    if vehicle.memory.active:
+        screen.blit(font_head.render(f"Stored: {vehicle.memory.name}", True, ORANGE),
+                    (PANEL_X+12, iy)); iy += 20
+        screen.blit(font_body.render("str:", True, GREY), (PANEL_X+12, iy+2))
+        bar(screen, PANEL_X+50, iy+2, PANEL_W-62, 13, vehicle.memory.strength,
+            vehicle.memory.capacity, ORANGE)
+    else:
+        screen.blit(font_body.render("— no memory stored —", True, GREY), (PANEL_X+12, iy))
+
+    # Legend  (pa titull: iy=y+10, 5×13=65, → h=78)
+    iy = panel(screen, PANEL_X, 574, PANEL_W, 72)
+    for col, txt in [
+        (BLUE,   "search / approach"),
+        (YELLOW, "INHIBITED — RED zbret sinjalin"),
+        (ORANGE, "memory mode (navigating)"),
+        (PURPLE, "DONE — counted all lights"),
+    ]:
+        pygame.draw.circle(screen, col, (PANEL_X+14, iy+6), 5)
+        screen.blit(font_body.render(txt, True, WHITE), (PANEL_X+26, iy))
+        iy += 13
 
     pygame.display.flip()
     clock.tick(fps)
